@@ -1,0 +1,9 @@
+{
+  "name": "openclaw-plugin-smart-router",
+  "version": "1.0.0",
+  "description": "Smart model routing",
+  "main": "index.ts",
+  "openclaw": {
+    "plugin": "./index.ts"
+  }
+}
