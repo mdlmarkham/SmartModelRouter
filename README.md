@@ -1,6 +1,6 @@
 # SmartModelRouter
 
-Intelligent model routing for OpenClaw, AWS Bedrock, and similar LLM gateways. Uses 14-dimension complexity scoring to automatically select the optimal model for each request.
+Intelligent model routing for OpenClaw, AWS Bedrock, OpenAI, and similar LLM gateways. Uses 14-dimension complexity scoring to automatically select the optimal model for each request.
 
 ## Features
 
@@ -20,6 +20,25 @@ Intelligent model routing for OpenClaw, AWS Bedrock, and similar LLM gateways. U
 - **100% accuracy** on REASONING tier (reasoning-override triggers)
 - **12/14 tests passing** (MEDIUM vs COMPLEX both route to same Sonnet model)
 
+## Quick Start
+
+1. **Install** the package:
+   ```bash
+   npm install @openclaw/smart-router
+   ```
+
+2. **Test routing** (uses defaults):
+   ```bash
+   node test-standalone.js
+   ```
+
+3. **(Optional)** Create `config.json` if defaults don't match your setup:
+   ```json
+   { "models": { "SIMPLE": "your-cheap-model", "MEDIUM": "your-mid-model" } }
+   ```
+
+4. **Verify routing** — Send "What is gravity?" and check it routes to SIMPLE tier.
+
 ## Tier Boundaries
 
 | Tier | Score Range | Typical Use Case |
@@ -28,6 +47,20 @@ Intelligent model routing for OpenClaw, AWS Bedrock, and similar LLM gateways. U
 | MEDIUM | 0.08 - 0.32 | Explanations, summaries |
 | COMPLEX | 0.32 - 0.58 | Implementations, architecture |
 | REASONING | ≥ 0.58 | Proofs, formal logic |
+
+## Model Capability Notes
+
+When selecting models for each tier, consider:
+
+| Tier | Requirements | Good Choices |
+|------|--------------|--------------|
+| SIMPLE | Any model works | Faster/cheaper is better |
+| MEDIUM | Balanced quality/cost | claude-sonnet, gpt-4.1 |
+| COMPLEX | Strong reasoning | claude-sonnet, gpt-4.1, glm-5 |
+| REASONING | Chain-of-thought optimized | claude-opus, o1, deepseek-r1 |
+| MULTIMODAL | **Must support vision** | llava, gpt-4.1, claude-sonnet, kimi-k2.5 |
+| LONG_CONTEXT | **Must support >100k tokens** | claude-sonnet, gemini-pro |
+| FALLBACK | Largest available | claude-opus, o1 |
 
 ## Installation
 
@@ -39,6 +72,17 @@ Or copy the files to your OpenClaw extensions directory:
 ```bash
 cp -r ./* /path/to/openclaw/extensions/smart-router/
 ```
+
+### File Locations
+
+After installation, files are located at:
+
+| Install Method | Location |
+|----------------|----------|
+| npm global | `$(npm root -g)/@openclaw/smart-router/` |
+| npm local | `./node_modules/@openclaw/smart-router/` |
+| OpenClaw extensions | `/root/.openclaw/extensions/smart-router/` |
+| Custom path | Set `SMART_ROUTER_CONFIG_PATH` env var |
 
 ## Configuration
 
@@ -58,6 +102,20 @@ The defaults in `router-modality.cjs` are a neutral starting point — AWS Bedro
 
 ---
 
+### Model Name Formats
+
+Different providers use different model identifier formats:
+
+| Provider | Format | Example |
+|----------|--------|---------|
+| AWS Bedrock | `amazon-bedrock/<profile>` | `us.anthropic.claude-sonnet-4-6` |
+| OpenAI | `openai/<model>` | `gpt-4.1`, `o1` |
+| Anthropic Direct | `anthropic/<model>` | `claude-sonnet-4-6` |
+| Ollama Cloud | `<model>:cloud` | `glm-5:cloud` |
+| Local Ollama | `<model>:<tag>` | `llama3.2:3b`, `llama3.2:latest` |
+
+---
+
 ### Customizing Models for Your Environment
 
 The defaults may not match your available models, budget, or quality preferences. Use `config.json` to tune per-tier models.
@@ -71,8 +129,7 @@ Create `config.json` in the extension directory (same location as `router-modali
 /path/to/openclaw/extensions/smart-router/config.json
 ```
 
-Example config for Bedrock with Haiku for MEDIUM:
-
+**AWS Bedrock (with Haiku for MEDIUM):**
 ```json
 {
   "models": {
@@ -87,8 +144,22 @@ Example config for Bedrock with Haiku for MEDIUM:
 }
 ```
 
-Example config for Ollama Cloud:
+**OpenAI:**
+```json
+{
+  "models": {
+    "SIMPLE": "openai/gpt-4.1-mini",
+    "MEDIUM": "openai/gpt-4.1",
+    "COMPLEX": "openai/gpt-4.1",
+    "REASONING": "openai/o1",
+    "MULTIMODAL": "openai/gpt-4.1",
+    "LONG_CONTEXT": "openai/gpt-4.1",
+    "FALLBACK": "openai/o1"
+  }
+}
+```
 
+**Ollama Cloud:**
 ```json
 {
   "models": {
@@ -103,8 +174,7 @@ Example config for Ollama Cloud:
 }
 ```
 
-Example config for local Ollama:
-
+**Local Ollama:**
 ```json
 {
   "models": {
@@ -119,11 +189,22 @@ Example config for local Ollama:
 }
 ```
 
+---
+
 #### Priority Order
 
-1. **Environment variable** — `SMART_ROUTER_TIER_MODEL` (e.g., `SMART_ROUTER_SIMPLE_MODEL=llama3.2:3b`)
+**Each tier is resolved independently.** You can mix configuration methods:
+
+```bash
+# Override just REASONING via env, keep others in config
+export SMART_ROUTER_REASONING_MODEL="openai/o1"
+# config.json sets SIMPLE, MEDIUM, COMPLEX, etc.
+```
+
+Priority per-tier:
+1. **Environment variable** — `SMART_ROUTER_<TIER>_MODEL` (highest)
 2. **config.json** — File-based configuration
-3. **Source defaults** — Hardcoded in `router-modality.cjs`
+3. **Source defaults** — Hardcoded in `router-modality.cjs` (lowest)
 
 #### Environment Variables
 
@@ -139,6 +220,62 @@ export SMART_ROUTER_MULTIMODAL_MODEL="your-vision-model"
 export SMART_ROUTER_LONG_CONTEXT_MODEL="your-large-context-model"
 export SMART_ROUTER_FALLBACK_MODEL="your-fallback-model"
 ```
+
+---
+
+## Troubleshooting
+
+### How do I know which tier a request routed to?
+
+Use the `classifyRequest()` function and check the result:
+
+```javascript
+const { classifyRequest } = require('./router-modality.cjs');
+const result = classifyRequest("What is gravity?");
+console.log(result.tier);       // 'SIMPLE'
+console.log(result.model);      // 'amazon-bedrock/us.amazon.nova-lite-v1:0'
+console.log(result.modelSource); // 'default', 'config', or 'env'
+console.log(result.confidence);  // 0.95
+console.log(result.score);      // 0.03
+```
+
+### What if the model is not found?
+
+Verify the model name format matches your provider. Check `result.model` after classification and compare against your provider's model list.
+
+### Can I disable dynamic routing?
+
+Set all tiers to the same model in config.json to effectively disable routing:
+
+```json
+{
+  "models": {
+    "SIMPLE": "openai/gpt-4.1",
+    "MEDIUM": "openai/gpt-4.1",
+    "COMPLEX": "openai/gpt-4.1",
+    "REASONING": "openai/gpt-4.1",
+    "MULTIMODAL": "openai/gpt-4.1",
+    "LONG_CONTEXT": "openai/gpt-4.1",
+    "FALLBACK": "openai/gpt-4.1"
+  }
+}
+```
+
+### How do I test my configuration?
+
+Run the test suite:
+
+```bash
+node test-standalone.js
+node -e "const r = require('./router-modality.cjs'); console.log(r.resolveActiveTiers());"
+```
+
+### Why is my request routing to the wrong tier?
+
+1. Check the score: `classifyRequest(prompt).score`
+2. Review tier boundaries (default: 0.08, 0.32, 0.58)
+3. Adjust thresholds in config.json if needed
+4. Check for keywords triggering reasoning override
 
 ---
 
@@ -198,6 +335,14 @@ node tune-thresholds.cjs
 ```
 
 ## Recent Changes
+
+### v1.1.2 (2026-03-23)
+- **Docs**: Added OpenAI config example (major gap)
+- **Docs**: Added Model Name Formats table by provider
+- **Docs**: Added Quick Start and Troubleshooting sections
+- **Docs**: Added File Locations table
+- **Docs**: Added Model Capability Notes table
+- **Docs**: Clarified partial override behavior (per-tier resolution)
 
 ### v1.1.1 (2026-03-23)
 - **Docs**: Elevated config.json to primary customization path
