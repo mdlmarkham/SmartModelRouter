@@ -11,7 +11,7 @@ Intelligent model routing for OpenClaw, AWS Bedrock, and similar LLM gateways. U
 - **Dynamic Escalation** — Escalates complexity tier mid-conversation (never downgrades)
 - **Model Optimization** — Routes simpler requests to cheaper models (10-20x cost savings)
 - **Session-Aware** — Tracks conversation complexity across turns
-- **AWS Bedrock Support** — Native support for cross-region inference profiles
+- **Environment-Specific Config** — Tune models for your cloud, costs, and available models
 
 ## Accuracy
 
@@ -29,12 +29,25 @@ Intelligent model routing for OpenClaw, AWS Bedrock, and similar LLM gateways. U
 | COMPLEX | 0.32 - 0.58 | Implementations, architecture |
 | REASONING | ≥ 0.58 | Proofs, formal logic |
 
-## Default Model Mappings
+## Installation
 
-### AWS Bedrock (Default)
+```bash
+npm install @openclaw/smart-router
+```
 
-| Tier | Model |
-|------|-------|
+Or copy the files to your OpenClaw extensions directory:
+```bash
+cp -r ./* /path/to/openclaw/extensions/smart-router/
+```
+
+## Configuration
+
+### Default Models (Source)
+
+The defaults in `router-modality.cjs` are a neutral starting point — AWS Bedrock cross-region profiles. **For production use, override via `config.json` to match your environment.**
+
+| Tier | Default Model |
+|------|---------------|
 | SIMPLE | amazon-bedrock/us.amazon.nova-lite-v1:0 |
 | MEDIUM | amazon-bedrock/us.anthropic.claude-sonnet-4-6 |
 | COMPLEX | amazon-bedrock/us.anthropic.claude-sonnet-4-6 |
@@ -43,16 +56,91 @@ Intelligent model routing for OpenClaw, AWS Bedrock, and similar LLM gateways. U
 | LONG_CONTEXT | amazon-bedrock/us.anthropic.claude-sonnet-4-6 |
 | FALLBACK | amazon-bedrock/us.anthropic.claude-opus-4-6-v1 |
 
-### Ollama Cloud (Alternative)
+---
 
-| Tier | Model |
-|------|-------|
-| SIMPLE | nemotron-3-nano:30b-cloud |
-| MEDIUM | glm-4.7:cloud |
-| COMPLEX | glm-5:cloud |
-| REASONING | minimax-m2.7:cloud |
-| MULTIMODAL | kimi-k2.5:cloud |
-| LONG_CONTEXT | nemotron-3-super:cloud |
+### Customizing Models for Your Environment
+
+The defaults may not match your available models, budget, or quality preferences. Use `config.json` to tune per-tier models.
+
+#### config.json (Recommended)
+
+Create `config.json` in the extension directory (same location as `router-modality.cjs`):
+
+```bash
+# For OpenClaw extensions
+/path/to/openclaw/extensions/smart-router/config.json
+```
+
+Example config for Bedrock with Haiku for MEDIUM:
+
+```json
+{
+  "models": {
+    "SIMPLE": "amazon-bedrock/us.amazon.nova-lite-v1:0",
+    "MEDIUM": "amazon-bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0",
+    "COMPLEX": "amazon-bedrock/us.anthropic.claude-sonnet-4-6",
+    "REASONING": "amazon-bedrock/us.anthropic.claude-opus-4-6-v1",
+    "MULTIMODAL": "amazon-bedrock/us.anthropic.claude-sonnet-4-6",
+    "LONG_CONTEXT": "amazon-bedrock/us.anthropic.claude-sonnet-4-6",
+    "FALLBACK": "amazon-bedrock/us.anthropic.claude-opus-4-6-v1"
+  }
+}
+```
+
+Example config for Ollama Cloud:
+
+```json
+{
+  "models": {
+    "SIMPLE": "nemotron-3-nano:30b-cloud",
+    "MEDIUM": "glm-4.7:cloud",
+    "COMPLEX": "glm-5:cloud",
+    "REASONING": "minimax-m2.7:cloud",
+    "MULTIMODAL": "kimi-k2.5:cloud",
+    "LONG_CONTEXT": "nemotron-3-super:cloud",
+    "FALLBACK": "mistral-large-3:675b-cloud"
+  }
+}
+```
+
+Example config for local Ollama:
+
+```json
+{
+  "models": {
+    "SIMPLE": "llama3.2:3b",
+    "MEDIUM": "llama3.2:latest",
+    "COMPLEX": "llama3.3:70b",
+    "REASONING": "deepseek-r1:8b",
+    "MULTIMODAL": "llava:13b",
+    "LONG_CONTEXT": "llama3.3:70b",
+    "FALLBACK": "llama3.3:70b"
+  }
+}
+```
+
+#### Priority Order
+
+1. **Environment variable** — `SMART_ROUTER_TIER_MODEL` (e.g., `SMART_ROUTER_SIMPLE_MODEL=llama3.2:3b`)
+2. **config.json** — File-based configuration
+3. **Source defaults** — Hardcoded in `router-modality.cjs`
+
+#### Environment Variables
+
+When file-based config isn't convenient (containers, serverless):
+
+```bash
+# Per-tier model overrides
+export SMART_ROUTER_SIMPLE_MODEL="your-cheap-model"
+export SMART_ROUTER_MEDIUM_MODEL="your-mid-model"
+export SMART_ROUTER_COMPLEX_MODEL="your-capable-model"
+export SMART_ROUTER_REASONING_MODEL="your-reasoning-model"
+export SMART_ROUTER_MULTIMODAL_MODEL="your-vision-model"
+export SMART_ROUTER_LONG_CONTEXT_MODEL="your-large-context-model"
+export SMART_ROUTER_FALLBACK_MODEL="your-fallback-model"
+```
+
+---
 
 ## Complexity Dimensions
 
@@ -89,55 +177,6 @@ Lowered `simpleMedium` from 0.16 → 0.08 so only clear trivia/greetings/definit
 
 Now fires on **single strong keyword** (prove that, theorem, derive, formally, mathematical proof) rather than requiring 2+.
 
-## Installation
-
-```bash
-npm install @openclaw/smart-router
-```
-
-Or copy the files to your OpenClaw extensions directory:
-```bash
-cp -r ./* /path/to/openclaw/extensions/smart-router/
-```
-
-## Configuration
-
-Add to your OpenClaw config:
-
-```json
-{
-  "models": {
-    "routing": {
-      "enabled": true,
-      "tiers": {
-        "SIMPLE": "your-cheap-model",
-        "MEDIUM": "your-mid-model",
-        "COMPLEX": "your-capable-model",
-        "REASONING": "your-reasoning-model",
-        "MULTIMODAL": "your-vision-model",
-        "LONG_CONTEXT": "your-large-context-model",
-        "FALLBACK": "your-fallback-model"
-      },
-      "thresholds": {
-        "simpleMedium": 0.08,
-        "mediumComplex": 0.32,
-        "complexReasoning": 0.58
-      }
-    }
-  }
-}
-```
-
-### Environment Overrides
-
-```bash
-# Per-tier model overrides
-SMART_ROUTER_SIMPLE_MODEL=your-cheap-model
-SMART_ROUTER_MEDIUM_MODEL=your-mid-model
-SMART_ROUTER_COMPLEX_MODEL=your-capable-model
-SMART_ROUTER_REASONING_MODEL=your-reasoning-model
-```
-
 ## Usage
 
 ```javascript
@@ -145,9 +184,9 @@ const { classifyRequest } = require('./router-modality.cjs');
 
 const result = classifyRequest(prompt, event);
 
-console.log(result.tier);      // 'SIMPLE', 'MEDIUM', 'COMPLEX', 'REASONING'
+console.log(result.tier);       // 'SIMPLE', 'MEDIUM', 'COMPLEX', 'REASONING'
 console.log(result.confidence); // 0.0 - 1.0
-console.log(result.model);      // Selected model for tier
+console.log(result.model);       // Selected model for tier
 console.log(result.modelSource); // 'env', 'config', or 'default'
 ```
 
@@ -160,14 +199,20 @@ node tune-thresholds.cjs
 
 ## Recent Changes
 
+### v1.1.1 (2026-03-23)
+- **Docs**: Elevated config.json to primary customization path
+- **Docs**: Added concrete config examples for Bedrock/Haiku, Ollama Cloud, local
+- **Docs**: Clarified config.json placement in extension directory
+- **Docs**: Documented config priority order (env > config > source)
+
 ### v1.1.0 (2026-03-22)
-- **Bedrock Adaptation**: Added TIERS_BEDROCK with AWS cross-region inference profiles
+- **Bedrock Adaptation**: Added TIERS_BEDROCK with AWS cross-region profiles
 - **Bug Fix**: Fixed simpleIndicators double-negative (score now positive, weight negative)
 - **Threshold**: Lowered simpleMedium from 0.16 → 0.08
 - **Keywords**: Added code keywords (create a function, write a function, refactor, debug)
-- **Keywords**: Added creative/summary keywords (summarize, summary of, explain in detail)
+- **Keywords**: Added creative/summary keywords (summarize, summary of)
 - **Reasoning**: Single strong keyword now triggers REASONING tier
-- **Simplified**: Removed Ollama env vars (OLLAMA_CLOUD_ENABLED, FORCE_LOCAL, FORCE_CLOUD)
+- **Simplified**: Removed Ollama env vars (OLLAMA_CLOUD_ENABLED, FORCE_LOCAL/CLOUD)
 - **Default**: Now uses TIERS_BEDROCK as baseline
 
 ## License
