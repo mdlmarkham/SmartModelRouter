@@ -29,6 +29,72 @@ function loadConfig() {
 
 // === Tier Assignments based on Capability ===
 
+// AWS Bedrock models (cross-region inference profiles)
+const TIERS_BEDROCK = {
+  // Text-only, fast for simple queries
+  SIMPLE: {
+    model: 'amazon-bedrock/us.amazon.nova-lite-v1:0',
+    contextWindow: 300000,
+    reasoning: false,
+    modality: ['text'],
+    useCase: 'Quick Q&A, definitions, short answers',
+  },
+  
+  // Balanced for medium complexity
+  MEDIUM: {
+    model: 'amazon-bedrock/us.anthropic.claude-sonnet-4-6',
+    contextWindow: 200000,
+    reasoning: false,
+    modality: ['text', 'vision'],
+    useCase: 'Explanations, summaries, simple code',
+  },
+  
+  // Primary for complex tasks
+  COMPLEX: {
+    model: 'amazon-bedrock/us.anthropic.claude-sonnet-4-6',
+    contextWindow: 200000,
+    reasoning: true,
+    modality: ['text', 'vision'],
+    useCase: 'Implementation, architecture, multi-step',
+  },
+  
+  // Deep reasoning model
+  REASONING: {
+    model: 'amazon-bedrock/us.anthropic.claude-opus-4-6-v1',
+    contextWindow: 200000,
+    reasoning: true,
+    modality: ['text', 'vision'],
+    useCase: 'Proofs, formal logic, deep reasoning',
+  },
+  
+  // Vision + text (screenshots, UI, diagrams)
+  MULTIMODAL: {
+    model: 'amazon-bedrock/us.anthropic.claude-sonnet-4-6',
+    contextWindow: 200000,
+    reasoning: true,
+    modality: ['text', 'vision'],
+    useCase: 'Images, screenshots, UI, diagrams',
+  },
+  
+  // Ultra-long context
+  LONG_CONTEXT: {
+    model: 'amazon-bedrock/us.anthropic.claude-sonnet-4-6',
+    contextWindow: 200000,
+    reasoning: true,
+    modality: ['text', 'vision'],
+    useCase: 'Long documents, codebases, books',
+  },
+  
+  // Fallback for edge cases
+  FALLBACK: {
+    model: 'amazon-bedrock/us.anthropic.claude-opus-4-6-v1',
+    contextWindow: 200000,
+    reasoning: true,
+    modality: ['text', 'vision'],
+    useCase: 'Fallback, largest model',
+  },
+};
+
 // Ollama Cloud models (original)
 const TIERS_CLOUD = {
   // Text-only, fast for simple queries
@@ -165,25 +231,9 @@ const TIERS_LOCAL = {
 
 function resolveActiveTiers() {
   const config = loadConfig();
-  const isCloudAvailable = process.env.OLLAMA_CLOUD_ENABLED === 'true';
   
-  // Environment override: force local if explicitly set
-  const forceLocal = process.env.SMART_ROUTER_FORCE_LOCAL === 'true';
-  const forceCloud = process.env.SMART_ROUTER_FORCE_CLOUD === 'true';
-  
-  // Determine base tier set
-  let baseTiers;
-  if (forceCloud && isCloudAvailable) {
-    baseTiers = TIERS_CLOUD;
-  } else if (forceLocal) {
-    baseTiers = TIERS_LOCAL;
-  } else if (config.fallbackToLocal && !isCloudAvailable) {
-    baseTiers = TIERS_LOCAL;
-  } else if (isCloudAvailable) {
-    baseTiers = TIERS_CLOUD;
-  } else {
-    baseTiers = TIERS_LOCAL;
-  }
+  // Use TIERS_BEDROCK as default, allow per-tier env overrides
+  let baseTiers = TIERS_BEDROCK;
   
   // Apply any configured model overrides
   const resolvedTiers = {};
@@ -209,7 +259,7 @@ function resolveActiveTiers() {
 }
 
 // Legacy export for backward compatibility
-const TIERS = TIERS_CLOUD;
+const TIERS = TIERS_BEDROCK;
 
 // Model capability lookup (from Ollama research)
 const MODEL_CAPABILITIES = {
@@ -373,8 +423,8 @@ function needsLongContext(event, estimatedTokens, promptText) {
 // === Enhanced Classification ===
 
 const TIER_BOUNDARIES = {
-  simpleMedium: 0.16,       // Moderate: SIMPLE should score < 0.16
-  mediumComplex: 0.32,      // Moderate: MEDIUM in 0.16-0.32 range
+  simpleMedium: 0.08,       // Lowered: Only clear trivia/greetings/definitions hit SIMPLE
+  mediumComplex: 0.32,      // Moderate: MEDIUM in 0.08-0.32 range
   complexReasoning: 0.58,   // Higher: COMPLEX in 0.32-0.58 range
 };
 
@@ -385,7 +435,9 @@ const KEYWORDS = {
   code: ["def ", "class ", "import ", "async ", "await ", "```", "func ", "struct ",
     "impl ", "interface ", "function(", "const ", "let ", "var ", "SELECT ",
     "implement ", "API endpoint", "REST API", "function that", "unit test",
-    "python code", "javascript code", "code snippet"],
+    "python code", "javascript code", "code snippet", "create a function",
+    "write a function", "write a script", "refactor", "debug", "add tests",
+    "calculate", "sort", "parse"],
   // Note: "function" and "variable" removed - too generic. Now requires context like "function("
   reasoning: ["prove that", "theorem", "derive", "chain of thought",
     "formally", "mathematical proof", "logically", "show your reasoning",
@@ -399,7 +451,8 @@ const KEYWORDS = {
     "rust", "production system", "debugging", "profiling", "monitoring",
     "react", "vue", "python", "javascript", "node.js"],
   creative: ["story", "poem", "compose", "brainstorm", "creative", "imagine",
-    "write a", "narrative", "fiction", "creative writing"],
+    "write a", "narrative", "fiction", "creative writing",
+    "summarize", "summary of", "explain in detail"],
   simple: ["what is the", "what is a", "define", "translate", "hello", "yes or no", "capital of",
     "how old", "who is", "when was", "what are", "list", "what's the", "what's a",
     "tell me", "give me", "brief", "short", "quick", "simple question"],
@@ -510,7 +563,7 @@ function classifyRequest(prompt, event = {}) {
     { name: 'reasoningMarkers', score: scoreKeywordMatch(combinedText, KEYWORDS.reasoning, { low: 1, high: 2 }, { none: 0, low: 0.7, high: 1.0 }) },
     { name: 'technicalTerms', score: scoreKeywordMatch(combinedText, KEYWORDS.technical, { low: 1, high: 2 }, { none: 0, low: 0.5, high: 1.0 }) },
     { name: 'creativeMarkers', score: scoreKeywordMatch(combinedText, KEYWORDS.creative, { low: 1, high: 2 }, { none: 0, low: 0.5, high: 0.7 }) },
-    { name: 'simpleIndicators', score: scoreKeywordMatch(combinedText, KEYWORDS.simple, { low: 1, high: 2 }, { none: 0, low: -0.5, high: -1.0 }) },
+    { name: 'simpleIndicators', score: scoreKeywordMatch(combinedText, KEYWORDS.simple, { low: 1, high: 2 }, { none: 0, low: 0.5, high: 1.0 }) },
     { name: 'imperativeVerbs', score: scoreKeywordMatch(combinedText, KEYWORDS.imperative, { low: 1, high: 2 }, { none: 0, low: 0.4, high: 0.6 }) },
     { name: 'constraintCount', score: scoreKeywordMatch(combinedText, KEYWORDS.constraints, { low: 1, high: 3 }, { none: 0, low: 0.3, high: 0.7 }) },
     { name: 'outputFormat', score: scoreKeywordMatch(combinedText, KEYWORDS.outputFormat, { low: 1, high: 2 }, { none: 0, low: 0.4, high: 0.7 }) },
@@ -536,12 +589,13 @@ function classifyRequest(prompt, event = {}) {
     }
   }
   
-  // Step 6: Check for reasoning override (3+ reasoning keywords, minimum 2 must be strong)
+  // Step 6: Check for reasoning override (single strong keyword OR 3+ reasoning keywords)
   const reasoningMatches = KEYWORDS.reasoning.filter(kw => combinedText.includes(kw.toLowerCase()));
-  const strongReasoningKeywords = ['prove that', 'theorem', 'formally', 'mathematical proof', 'reasoning chain'];
+  const strongReasoningKeywords = ['prove that', 'theorem', 'derive', 'formally', 'mathematical proof'];
   const strongMatches = strongReasoningKeywords.filter(kw => combinedText.includes(kw.toLowerCase()));
   
-  if (reasoningMatches.length >= 3 || (reasoningMatches.length >= 2 && strongMatches.length >= 1)) {
+  // Single strong keyword is enough for reasoning override
+  if (strongMatches.length >= 1 || reasoningMatches.length >= 3) {
     // Cap reasoning score to prevent overflow
     const cappedScore = Math.min(weightedScore, 0.95);
     return {
@@ -787,6 +841,7 @@ module.exports = {
   needsLongContext,
   resolveActiveTiers,
   loadConfig,
+  TIERS_BEDROCK,
   TIERS_CLOUD,
   TIERS_LOCAL,
   MODEL_CAPABILITIES,
