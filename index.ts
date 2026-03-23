@@ -16,14 +16,15 @@ try {
   console.error('[smart-router] Failed to load complexity tracker:', (e as Error).message);
 }
 
+// Default tier model mappings (Bedrock)
 const DEFAULT_TIERS = {
-  SIMPLE: 'nemotron-3-nano:30b-cloud',
-  MEDIUM: 'glm-4.7:cloud',
-  COMPLEX: 'glm-5:cloud',
-  REASONING: 'minimax-m2.7:cloud',
-  MULTIMODAL: 'kimi-k2.5:cloud',
-  LONG_CONTEXT: 'nemotron-3-super:cloud',
-  FALLBACK: 'mistral-large-3:675b-cloud',
+  SIMPLE: 'amazon-bedrock/us.amazon.nova-lite-v1:0',
+  MEDIUM: 'amazon-bedrock/us.anthropic.claude-sonnet-4-6',
+  COMPLEX: 'amazon-bedrock/us.anthropic.claude-sonnet-4-6',
+  REASONING: 'amazon-bedrock/us.anthropic.claude-opus-4-6-v1',
+  MULTIMODAL: 'amazon-bedrock/us.anthropic.claude-sonnet-4-6',
+  LONG_CONTEXT: 'amazon-bedrock/us.anthropic.claude-sonnet-4-6',
+  FALLBACK: 'amazon-bedrock/us.anthropic.claude-opus-4-6-v1',
 };
 
 const plugin: OpenClawPluginDefinition = {
