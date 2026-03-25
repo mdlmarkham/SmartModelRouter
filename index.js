@@ -1,0 +1,1259 @@
+var __defProp = Object.defineProperty;
+var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
+var __getOwnPropNames = Object.getOwnPropertyNames;
+var __hasOwnProp = Object.prototype.hasOwnProperty;
+var __commonJS = (cb, mod) => function __require() {
+  return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
+};
+var __export = (target, all) => {
+  for (var name in all)
+    __defProp(target, name, { get: all[name], enumerable: true });
+};
+var __copyProps = (to, from, except, desc) => {
+  if (from && typeof from === "object" || typeof from === "function") {
+    for (let key of __getOwnPropNames(from))
+      if (!__hasOwnProp.call(to, key) && key !== except)
+        __defProp(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable });
+  }
+  return to;
+};
+var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
+
+// router-modality.cjs
+var require_router_modality = __commonJS({
+  "router-modality.cjs"(exports2, module2) {
+    var fs = require("fs");
+    var path = require("path");
+    var CONFIG_PATH = path.join(__dirname, "config.json");
+    function loadConfig() {
+      try {
+        if (fs.existsSync(CONFIG_PATH)) {
+          const content = fs.readFileSync(CONFIG_PATH, "utf8");
+          return JSON.parse(content);
+        }
+      } catch (err) {
+        console.warn("[smart-router] Failed to load config.json:", err.message);
+      }
+      return { models: {}, fallbackToLocal: false };
+    }
+    var TIERS_BEDROCK = {
+      // Text-only, fast for simple queries
+      SIMPLE: {
+        model: "amazon-bedrock/us.amazon.nova-lite-v1:0",
+        contextWindow: 3e5,
+        reasoning: false,
+        modality: ["text"],
+        useCase: "Quick Q&A, definitions, short answers"
+      },
+      // Balanced for medium complexity
+      MEDIUM: {
+        model: "amazon-bedrock/us.anthropic.claude-sonnet-4-6",
+        contextWindow: 2e5,
+        reasoning: false,
+        modality: ["text", "vision"],
+        useCase: "Explanations, summaries, simple code"
+      },
+      // Primary for complex tasks
+      COMPLEX: {
+        model: "amazon-bedrock/us.anthropic.claude-sonnet-4-6",
+        contextWindow: 2e5,
+        reasoning: true,
+        modality: ["text", "vision"],
+        useCase: "Implementation, architecture, multi-step"
+      },
+      // Deep reasoning model
+      REASONING: {
+        model: "amazon-bedrock/us.anthropic.claude-opus-4-6-v1",
+        contextWindow: 2e5,
+        reasoning: true,
+        modality: ["text", "vision"],
+        useCase: "Proofs, formal logic, deep reasoning"
+      },
+      // Vision + text (screenshots, UI, diagrams)
+      MULTIMODAL: {
+        model: "amazon-bedrock/us.anthropic.claude-sonnet-4-6",
+        contextWindow: 2e5,
+        reasoning: true,
+        modality: ["text", "vision"],
+        useCase: "Images, screenshots, UI, diagrams"
+      },
+      // Ultra-long context
+      LONG_CONTEXT: {
+        model: "amazon-bedrock/us.anthropic.claude-sonnet-4-6",
+        contextWindow: 2e5,
+        reasoning: true,
+        modality: ["text", "vision"],
+        useCase: "Long documents, codebases, books"
+      },
+      // Fallback for edge cases
+      FALLBACK: {
+        model: "amazon-bedrock/us.anthropic.claude-opus-4-6-v1",
+        contextWindow: 2e5,
+        reasoning: true,
+        modality: ["text", "vision"],
+        useCase: "Fallback, largest model"
+      }
+    };
+    var TIERS_CLOUD = {
+      // Text-only, fast for simple queries
+      SIMPLE: {
+        model: "nemotron-3-nano:30b-cloud",
+        contextWindow: 131072,
+        reasoning: false,
+        modality: ["text"],
+        useCase: "Quick Q&A, definitions, short answers"
+      },
+      // Balanced for medium complexity
+      MEDIUM: {
+        model: "glm-4.7:cloud",
+        contextWindow: 131072,
+        reasoning: false,
+        modality: ["text"],
+        useCase: "Explanations, summaries, simple code"
+      },
+      // Primary for complex tasks
+      COMPLEX: {
+        model: "glm-5:cloud",
+        contextWindow: 131072,
+        reasoning: true,
+        modality: ["text"],
+        useCase: "Implementation, architecture, multi-step"
+      },
+      // MoE efficient, marked for reasoning
+      REASONING: {
+        model: "minimax-m2.7:cloud",
+        contextWindow: 204800,
+        // 200K
+        reasoning: true,
+        modality: ["text"],
+        useCase: "Proofs, formal logic, deep reasoning"
+      },
+      // Vision + text (screenshots, UI, diagrams)
+      MULTIMODAL: {
+        model: "kimi-k2.5:cloud",
+        contextWindow: 262144,
+        // 262K
+        reasoning: true,
+        modality: ["text", "vision"],
+        useCase: "Images, screenshots, UI, diagrams"
+      },
+      // Ultra-long context
+      LONG_CONTEXT: {
+        model: "nemotron-3-super:cloud",
+        contextWindow: 524288,
+        // 512K
+        reasoning: true,
+        modality: ["text"],
+        useCase: "Long documents, codebases, books"
+      },
+      // Fallback for edge cases
+      FALLBACK: {
+        model: "mistral-large-3:675b-cloud",
+        contextWindow: 262144,
+        // 256K
+        reasoning: false,
+        modality: ["text", "image"],
+        useCase: "Fallback, largest model"
+      }
+    };
+    var TIERS_LOCAL = {
+      // Small, fast model for simple queries
+      SIMPLE: {
+        model: "llama3.2:3b",
+        contextWindow: 8192,
+        reasoning: false,
+        modality: ["text"],
+        useCase: "Quick Q&A, definitions, short answers"
+      },
+      // Balanced for medium complexity
+      MEDIUM: {
+        model: "llama3.2:latest",
+        contextWindow: 128e3,
+        reasoning: false,
+        modality: ["text"],
+        useCase: "Explanations, summaries, simple code"
+      },
+      // Capable for complex tasks
+      COMPLEX: {
+        model: "llama3.3:70b",
+        contextWindow: 128e3,
+        reasoning: true,
+        modality: ["text"],
+        useCase: "Implementation, architecture, multi-step"
+      },
+      // Deep reasoning model
+      REASONING: {
+        model: "deepseek-r1:8b",
+        contextWindow: 128e3,
+        reasoning: true,
+        modality: ["text"],
+        useCase: "Proofs, formal logic, deep reasoning"
+      },
+      // Vision-capable model
+      MULTIMODAL: {
+        model: "llava:13b",
+        contextWindow: 8192,
+        reasoning: false,
+        modality: ["text", "vision"],
+        useCase: "Images, screenshots, UI, diagrams"
+      },
+      // Long context model
+      LONG_CONTEXT: {
+        model: "llama3.3:70b",
+        contextWindow: 128e3,
+        reasoning: true,
+        modality: ["text"],
+        useCase: "Long documents, codebases, books"
+      },
+      // Fallback
+      FALLBACK: {
+        model: "llama3.3:70b",
+        contextWindow: 128e3,
+        reasoning: true,
+        modality: ["text"],
+        useCase: "Fallback, largest available model"
+      }
+    };
+    function resolveActiveTiers() {
+      const config = loadConfig();
+      let baseTiers = TIERS_BEDROCK;
+      const resolvedTiers = {};
+      for (const [tier, config_] of Object.entries(baseTiers)) {
+        const envKey = `SMART_ROUTER_${tier}_MODEL`;
+        const envModel = process.env[envKey];
+        const configModel = config.models?.[tier];
+        const model = envModel || configModel || config_.model;
+        resolvedTiers[tier] = {
+          ...config_,
+          model,
+          _source: envModel ? "env" : configModel ? "config" : "default"
+        };
+      }
+      return resolvedTiers;
+    }
+    var MODEL_CAPABILITIES = {
+      "glm-4.7:cloud": {
+        params: "300B",
+        context: 131072,
+        modality: ["text"],
+        reasoning: false,
+        swebench: null,
+        contextLimit: false
+      },
+      "glm-5:cloud": {
+        params: "744B (40B active)",
+        context: 131072,
+        modality: ["text"],
+        reasoning: true,
+        aime: 92.7,
+        swebench: 77.8,
+        contextLimit: false
+      },
+      "kimi-k2.5:cloud": {
+        params: "1T (32B active)",
+        context: 262144,
+        // 262K
+        modality: ["text", "vision"],
+        reasoning: true,
+        thinking: true,
+        swebench: 76.2,
+        longContext: true
+      },
+      "minimax-m2.7:cloud": {
+        params: "456B (45.9B active)",
+        context: 204800,
+        // 200K
+        modality: ["text"],
+        reasoning: true,
+        thinking: true,
+        swepro: 56.22,
+        toolathon: 46.3
+      },
+      "nemotron-3-super:cloud": {
+        params: "120B (12B active)",
+        context: 524288,
+        // 512K
+        modality: ["text"],
+        reasoning: true,
+        configurableReasoning: true,
+        taubench: 61.15
+      },
+      "mistral-large-3:675b-cloud": {
+        params: "675B",
+        context: 262144,
+        // 256K
+        modality: ["text", "image"],
+        reasoning: false
+      }
+    };
+    function detectModality(event) {
+      const modalities = /* @__PURE__ */ new Set(["text"]);
+      if (event?.messages) {
+        for (const msg of event.messages) {
+          if (msg.images?.length > 0 || msg.image?.url || msg.image?.base64) {
+            modalities.add("vision");
+          }
+          if (msg.content && Array.isArray(msg.content)) {
+            for (const part of msg.content) {
+              if (part.type === "image" || part.type === "image_url" || part.image_url) {
+                modalities.add("vision");
+              }
+            }
+          }
+          if (typeof msg.content === "string" && (msg.content.includes("data:image") || msg.content.includes(".png") || msg.content.includes(".jpg") || msg.content.includes(".jpeg") || msg.content.includes(".gif") || msg.content.includes(".webp"))) {
+            modalities.add("vision");
+          }
+        }
+      }
+      if (event?.files?.length > 0) {
+        for (const file of event.files) {
+          if (file.type?.startsWith("image/")) {
+            modalities.add("vision");
+          }
+        }
+      }
+      const systemPrompt = event?.systemPrompt || "";
+      if (systemPrompt.toLowerCase().includes("screenshot") || systemPrompt.toLowerCase().includes("image") || systemPrompt.toLowerCase().includes("diagram") || systemPrompt.toLowerCase().includes("ui ")) {
+        modalities.add("vision");
+      }
+      return Array.from(modalities);
+    }
+    function estimateTokenCount(text) {
+      return Math.ceil(text.length / 4);
+    }
+    function needsLongContext(event, estimatedTokens, promptText) {
+      const LONG_CONTEXT_THRESHOLD = 5e4;
+      const CODEBASE_THRESHOLD = 2;
+      if (estimatedTokens > LONG_CONTEXT_THRESHOLD) {
+        return true;
+      }
+      const prompt = (promptText || event?.prompt || "") + " " + (event?.systemPrompt || "");
+      const lowerPrompt = prompt.toLowerCase();
+      if (lowerPrompt.includes("entire codebase") || lowerPrompt.includes("all files") || lowerPrompt.includes("complete codebase") || lowerPrompt.includes("whole repository") || lowerPrompt.includes("entire repository")) {
+        return true;
+      }
+      const specificMentions = (lowerPrompt.match(/codebase|repository|files\s+in|entire\s+\w+/g) || []).length;
+      if (specificMentions >= 2) {
+        return true;
+      }
+      if (lowerPrompt.includes("entire book") || lowerPrompt.includes("full document") || lowerPrompt.includes("500-page") || lowerPrompt.includes("all modules") || lowerPrompt.includes("comprehensive analysis") || lowerPrompt.includes("complete repository")) {
+        return true;
+      }
+      if (event?.fileTokens && event.fileTokens > LONG_CONTEXT_THRESHOLD) {
+        return true;
+      }
+      return false;
+    }
+    var TIER_BOUNDARIES = {
+      simpleMedium: 0.08,
+      // Lowered: Only clear trivia/greetings/definitions hit SIMPLE
+      mediumComplex: 0.32,
+      // Moderate: MEDIUM in 0.08-0.32 range
+      complexReasoning: 0.58
+      // Higher: COMPLEX in 0.32-0.58 range
+    };
+    var CONFIDENCE_STEEPNESS = 10;
+    var CONFIDENCE_THRESHOLD = 0.45;
+    var KEYWORDS = {
+      code: [
+        "def ",
+        "class ",
+        "import ",
+        "async ",
+        "await ",
+        "```",
+        "func ",
+        "struct ",
+        "impl ",
+        "interface ",
+        "function(",
+        "const ",
+        "let ",
+        "var ",
+        "SELECT ",
+        "implement ",
+        "API endpoint",
+        "REST API",
+        "function that",
+        "unit test",
+        "python code",
+        "javascript code",
+        "code snippet",
+        "create a function",
+        "write a function",
+        "write a script",
+        "refactor",
+        "debug",
+        "add tests",
+        "calculate",
+        "sort",
+        "parse"
+      ],
+      // Note: "function" and "variable" removed - too generic. Now requires context like "function("
+      reasoning: [
+        "prove that",
+        "theorem",
+        "derive",
+        "chain of thought",
+        "formally",
+        "mathematical proof",
+        "logically",
+        "show your reasoning",
+        "demonstrate that",
+        "reasoning chain",
+        "deduce that",
+        "think through",
+        "reason through"
+      ],
+      technical: [
+        "algorithm",
+        "optimize",
+        "distributed system",
+        "kubernetes",
+        "microservice",
+        "database",
+        "infrastructure",
+        "system design",
+        "scalability",
+        "latency",
+        "throughput",
+        "concurrency",
+        "partition",
+        "shard",
+        "authentication",
+        "security vulnerability",
+        "deployment",
+        "pipeline",
+        "architecture",
+        "API gateway",
+        "REST API",
+        "GraphQL API",
+        "rust",
+        "production system",
+        "debugging",
+        "profiling",
+        "monitoring",
+        "react",
+        "vue",
+        "python",
+        "javascript",
+        "node.js"
+      ],
+      creative: [
+        "story",
+        "poem",
+        "compose",
+        "brainstorm",
+        "creative",
+        "imagine",
+        "write a",
+        "narrative",
+        "fiction",
+        "creative writing",
+        "summarize",
+        "summary of",
+        "explain in detail"
+      ],
+      simple: [
+        "what is the",
+        "what is a",
+        "define",
+        "translate",
+        "hello",
+        "yes or no",
+        "capital of",
+        "how old",
+        "who is",
+        "when was",
+        "what are",
+        "list",
+        "what's the",
+        "what's a",
+        "tell me",
+        "give me",
+        "brief",
+        "short",
+        "quick",
+        "simple question"
+      ],
+      imperative: [
+        "build",
+        "create",
+        "implement",
+        "design",
+        "develop",
+        "construct",
+        "generate",
+        "deploy",
+        "configure",
+        "set up",
+        "write",
+        "fix",
+        "refactor",
+        "analyze",
+        "investigate",
+        "explain",
+        "summarize",
+        "read",
+        "show me",
+        "research",
+        "compare",
+        "evaluate",
+        "review",
+        "assess"
+      ],
+      constraints: [
+        "must be",
+        "without",
+        "only use",
+        "exactly",
+        "specifically",
+        "ensure that",
+        "requirement",
+        "constraint",
+        "limit",
+        "maximum",
+        "minimum"
+      ],
+      outputFormat: [
+        "json",
+        "markdown",
+        "table",
+        "bullet",
+        "list",
+        "format",
+        "csv",
+        "yaml",
+        "structured",
+        "output as"
+      ],
+      references: [
+        "the above",
+        "below",
+        "section",
+        "chapter",
+        "figure",
+        "table",
+        "previous",
+        "following",
+        "mentioned",
+        "reference",
+        "citation"
+      ],
+      negation: [
+        "not",
+        "never",
+        "exclude",
+        "but not",
+        "except",
+        "without",
+        "avoid",
+        "skip",
+        "don't",
+        "do not",
+        "should not"
+      ],
+      domain: [
+        "legal",
+        "medical",
+        "financial",
+        "constitutional",
+        "statutory",
+        "biological",
+        "chemical",
+        "physical",
+        "economic",
+        "political",
+        "implications",
+        "analysis"
+      ],
+      agentic: [
+        "using your tools",
+        "spawn",
+        "investigate",
+        "analyze",
+        "file",
+        "read",
+        "write",
+        "edit",
+        "browser",
+        "search",
+        "execute"
+      ],
+      vision: [
+        "screenshot",
+        "screenshot of",
+        "image shows",
+        "diagram shows",
+        "ui mockup",
+        "visual interface",
+        "picture shows",
+        "photo of",
+        "graph displays",
+        "chart shows",
+        "see the image",
+        "analyze the image",
+        "in this image",
+        "attached image",
+        "uploaded image"
+      ],
+      longContext: [
+        "entire",
+        "all files",
+        "complete codebase",
+        "whole document",
+        "full history",
+        "everything",
+        "comprehensive",
+        "thorough analysis"
+      ]
+    };
+    var WEIGHTS = {
+      tokenCount: 0.05,
+      codePresence: 0.22,
+      // Increased: code is strong signal
+      reasoningMarkers: 0.28,
+      // Increased: reasoning is strong signal
+      technicalTerms: 0.18,
+      // Increased: technical content matters
+      creativeMarkers: 0.08,
+      simpleIndicators: -0.2,
+      // Moderate negative: simple queries
+      multiStepPatterns: 0.15,
+      // Moderate: multi-step tasks
+      questionComplexity: 0.05,
+      imperativeVerbs: 0.18,
+      // Increased: imperative tasks
+      constraintCount: 0.18,
+      // Increased: constraints are strong signals
+      outputFormat: 0.06,
+      // Slight increase: format requirements
+      referenceComplexity: 0.05,
+      negationComplexity: 0.05,
+      domainSpecificity: 0.15,
+      // Increased: domain knowledge
+      agenticTask: 0.2,
+      visionIndicators: 0.25,
+      // Vision signals
+      longContextIndicators: 0.5
+      // Strong signal for long context
+    };
+    function classifyRequest(prompt, event = {}) {
+      const TIERS2 = resolveActiveTiers();
+      const userText = prompt.toLowerCase();
+      const systemPrompt = event?.systemPrompt || "";
+      const combinedText = userText + " " + systemPrompt.toLowerCase();
+      const modalities = detectModality(event);
+      const hasEmbeddedImage = /\bdata:image\/(png|jpe?g|gif|webp|svg\+xml);/i.test(prompt);
+      if (hasEmbeddedImage && !modalities.includes("vision")) {
+        modalities.push("vision");
+      }
+      const hasVision = modalities.includes("vision");
+      const estimatedTokens = estimateTokenCount(prompt + systemPrompt);
+      const needsLong = needsLongContext(event, estimatedTokens, prompt);
+      if (hasVision) {
+        return {
+          tier: "MULTIMODAL",
+          confidence: 0.95,
+          score: 0.5,
+          // Vision flag adds 0.50
+          signals: ["vision-detected", `modalities:${modalities.join(",")}`],
+          modality: modalities,
+          contextNeeds: needsLong ? "long" : "normal",
+          estimatedTokens,
+          model: TIERS2.MULTIMODAL.model,
+          modelSource: TIERS2.MULTIMODAL._source,
+          reason: "Vision content detected \u2192 multimodal model"
+        };
+      }
+      if (needsLong) {
+        return {
+          tier: "LONG_CONTEXT",
+          confidence: 0.9,
+          score: 0.4,
+          // Long context flag adds 0.40
+          signals: ["long-context-required", `tokens:${estimatedTokens}`],
+          modality: modalities,
+          contextNeeds: "long",
+          estimatedTokens,
+          model: TIERS2.LONG_CONTEXT.model,
+          modelSource: TIERS2.LONG_CONTEXT._source,
+          reason: "Long context required \u2192 long context model"
+        };
+      }
+      const dimensions = [
+        { name: "codePresence", score: scoreKeywordMatch(combinedText, KEYWORDS.code, { low: 1, high: 2 }, { none: 0, low: 0.5, high: 1 }) },
+        { name: "reasoningMarkers", score: scoreKeywordMatch(combinedText, KEYWORDS.reasoning, { low: 1, high: 2 }, { none: 0, low: 0.7, high: 1 }) },
+        { name: "technicalTerms", score: scoreKeywordMatch(combinedText, KEYWORDS.technical, { low: 1, high: 2 }, { none: 0, low: 0.5, high: 1 }) },
+        { name: "creativeMarkers", score: scoreKeywordMatch(combinedText, KEYWORDS.creative, { low: 1, high: 2 }, { none: 0, low: 0.5, high: 0.7 }) },
+        { name: "simpleIndicators", score: scoreKeywordMatch(combinedText, KEYWORDS.simple, { low: 1, high: 2 }, { none: 0, low: 0.5, high: 1 }) },
+        { name: "imperativeVerbs", score: scoreKeywordMatch(combinedText, KEYWORDS.imperative, { low: 1, high: 2 }, { none: 0, low: 0.4, high: 0.6 }) },
+        { name: "constraintCount", score: scoreKeywordMatch(combinedText, KEYWORDS.constraints, { low: 1, high: 3 }, { none: 0, low: 0.3, high: 0.7 }) },
+        { name: "outputFormat", score: scoreKeywordMatch(combinedText, KEYWORDS.outputFormat, { low: 1, high: 2 }, { none: 0, low: 0.4, high: 0.7 }) },
+        { name: "domainSpecificity", score: scoreKeywordMatch(combinedText, KEYWORDS.domain, { low: 1, high: 2 }, { none: 0, low: 0.5, high: 0.8 }) },
+        { name: "agenticTask", score: scoreAgenticTask(combinedText) },
+        { name: "visionIndicators", score: scoreKeywordMatch(combinedText, KEYWORDS.vision, { low: 1, high: 2 }, { none: 0, low: 0.8, high: 1 }) },
+        { name: "longContextIndicators", score: scoreKeywordMatch(combinedText, KEYWORDS.longContext, { low: 1, high: 2 }, { none: 0, low: 0.6, high: 0.9 }) }
+      ];
+      const tokenScore = estimatedTokens < 500 ? -0.5 : estimatedTokens > 5e3 ? 0.5 : 0;
+      dimensions.unshift({ name: "tokenCount", score: tokenScore });
+      let weightedScore = 0;
+      const signals = [];
+      for (const dim of dimensions) {
+        const weight = WEIGHTS[dim.name] ?? 0;
+        weightedScore += dim.score * weight;
+        if (dim.score !== 0 && Math.abs(dim.score) > 0.2) {
+          signals.push(`${dim.name}:${dim.score > 0 ? "+" : ""}${dim.score.toFixed(1)}`);
+        }
+      }
+      const reasoningMatches = KEYWORDS.reasoning.filter((kw) => combinedText.includes(kw.toLowerCase()));
+      const strongReasoningKeywords = ["prove that", "theorem", "derive", "formally", "mathematical proof"];
+      const strongMatches = strongReasoningKeywords.filter((kw) => combinedText.includes(kw.toLowerCase()));
+      if (strongMatches.length >= 1 || reasoningMatches.length >= 3) {
+        const cappedScore = Math.min(weightedScore, 0.95);
+        return {
+          tier: "REASONING",
+          confidence: 0.9,
+          score: cappedScore,
+          signals: [...signals, "reasoning-override"],
+          modality: modalities,
+          contextNeeds: "normal",
+          estimatedTokens,
+          model: TIERS2.REASONING.model,
+          modelSource: TIERS2.REASONING._source,
+          reason: "Reasoning keywords detected \u2192 reasoning model"
+        };
+      }
+      let tier;
+      let distanceFromBoundary;
+      if (weightedScore < TIER_BOUNDARIES.simpleMedium) {
+        tier = "SIMPLE";
+        distanceFromBoundary = TIER_BOUNDARIES.simpleMedium - weightedScore;
+      } else if (weightedScore < TIER_BOUNDARIES.mediumComplex) {
+        tier = "MEDIUM";
+        distanceFromBoundary = Math.min(weightedScore - TIER_BOUNDARIES.simpleMedium, TIER_BOUNDARIES.mediumComplex - weightedScore);
+      } else if (weightedScore < TIER_BOUNDARIES.complexReasoning) {
+        tier = "COMPLEX";
+        distanceFromBoundary = Math.min(weightedScore - TIER_BOUNDARIES.mediumComplex, TIER_BOUNDARIES.complexReasoning - weightedScore);
+      } else {
+        tier = "REASONING";
+        distanceFromBoundary = weightedScore - TIER_BOUNDARIES.complexReasoning;
+      }
+      const confidence = 1 / (1 + Math.exp(-CONFIDENCE_STEEPNESS * distanceFromBoundary));
+      if (confidence < CONFIDENCE_THRESHOLD) {
+        return {
+          tier: null,
+          confidence,
+          score: weightedScore,
+          signals,
+          modality: modalities,
+          contextNeeds: needsLong ? "long" : "normal",
+          estimatedTokens,
+          model: TIERS2.COMPLEX.model,
+          // Default to complex when ambiguous
+          modelSource: TIERS2.COMPLEX._source,
+          reason: "Ambiguous classification \u2192 default to complex"
+        };
+      }
+      const tierConfig = TIERS2[tier];
+      return {
+        tier,
+        confidence,
+        score: weightedScore,
+        signals,
+        modality: modalities,
+        contextNeeds: needsLong ? "long" : "normal",
+        estimatedTokens,
+        model: tierConfig.model,
+        modelSource: tierConfig._source,
+        contextWindow: tierConfig.contextWindow,
+        reason: `Score ${weightedScore.toFixed(2)} \u2192 ${tier} tier`
+      };
+    }
+    function scoreKeywordMatch(text, keywords, thresholds, scores) {
+      const matches = keywords.filter((kw) => text.includes(kw.toLowerCase()));
+      if (matches.length >= thresholds.high) return scores.high;
+      if (matches.length >= thresholds.low) return scores.low;
+      return scores.none;
+    }
+    function scoreAgenticTask(text) {
+      const matches = KEYWORDS.agentic.filter((kw) => text.includes(kw.toLowerCase()));
+      if (matches.length >= 4) return 1;
+      if (matches.length >= 3) return 0.6;
+      if (matches.length >= 1) return 0.2;
+      return 0;
+    }
+    function runTests() {
+      const TIERS2 = resolveActiveTiers();
+      const testCases = [
+        // SIMPLE
+        { prompt: "What is the capital of France?", expected: "SIMPLE" },
+        { prompt: "Hello", expected: "SIMPLE" },
+        { prompt: "Define polymorphism", expected: "SIMPLE" },
+        // MEDIUM
+        { prompt: "Explain how async/await works in JavaScript", expected: "MEDIUM" },
+        { prompt: "Summarize this article about climate change", expected: "MEDIUM" },
+        { prompt: "Create a function to calculate fibonacci", expected: "MEDIUM" },
+        // COMPLEX
+        { prompt: "Implement a REST API with authentication and database", expected: "COMPLEX" },
+        { prompt: "Design a microservices architecture for an e-commerce platform", expected: "COMPLEX" },
+        { prompt: "Refactor this code to use functional programming patterns and add tests", expected: "COMPLEX" },
+        // REASONING
+        { prompt: "Prove that the square root of 2 is irrational", expected: "REASONING" },
+        { prompt: "Using formal logic, derive the conclusion step by step", expected: "REASONING" },
+        // MULTIMODAL (with images)
+        { prompt: "What's in this screenshot?", event: { messages: [{ images: ["screenshot.png"] }] }, expected: "MULTIMODAL" },
+        { prompt: "Analyze this UI mockup for usability issues", event: { messages: [{ content: "Analyze this UI mockup" }] }, expected: "COMPLEX" },
+        // LONG_CONTEXT
+        { prompt: "Analyze the entire codebase and identify all security vulnerabilities", expected: "LONG_CONTEXT" }
+      ];
+      console.log("\n=== Modality-Aware Smart Router Tests ===\n");
+      console.log(`Model source: ${process.env.OLLAMA_CLOUD_ENABLED === "true" ? "cloud" : "local"}
+`);
+      let passed = 0;
+      let failed = 0;
+      for (const tc of testCases) {
+        const result = classifyRequest(tc.prompt, tc.event || {});
+        const pass = result.tier === tc.expected;
+        const status = pass ? "\u2713" : "\u2717";
+        console.log(`${status} [${tc.expected}]`);
+        console.log(`    Prompt: "${tc.prompt.slice(0, 50)}..."`);
+        console.log(`    Got: ${result.tier} (conf: ${result.confidence.toFixed(2)}, score: ${result.score.toFixed(2)})`);
+        console.log(`    Model: ${result.model} (${result.modelSource || "default"})`);
+        if (result.signals.length > 0) {
+          console.log(`    Signals: ${result.signals.slice(0, 5).join(", ")}`);
+        }
+        if (result.modality?.length > 1 || result.modality?.[0] !== "text") {
+          console.log(`    Modality: ${result.modality?.join("+")}`);
+        }
+        console.log();
+        if (pass) passed++;
+        else failed++;
+      }
+      console.log(`=== Results: ${passed}/${testCases.length} passed, ${failed} failed ===
+`);
+      console.log("=== Tier Summary ===\n");
+      for (const [tier, config] of Object.entries(TIERS2)) {
+        console.log(`${tier}: ${config.model}`);
+        console.log(`  Source: ${config._source || "default"}`);
+        console.log(`  Context: ${(config.contextWindow / 1024).toFixed(0)}K tokens`);
+        console.log(`  Modality: ${config.modality.join("+")}`);
+        console.log(`  Use case: ${config.useCase}`);
+        console.log();
+      }
+    }
+    var args = process.argv.slice(2);
+    if (args.length === 0) {
+      runTests();
+    } else if (args[0] === "--test") {
+      runTests();
+    } else if (args[0] === "--tiers") {
+      const TIERS2 = resolveActiveTiers();
+      const isCloud = process.env.OLLAMA_CLOUD_ENABLED === "true";
+      const forceLocal = process.env.SMART_ROUTER_FORCE_LOCAL === "true";
+      const forceCloud = process.env.SMART_ROUTER_FORCE_CLOUD === "true";
+      let mode = "local";
+      if (forceCloud && isCloud) mode = "cloud (forced)";
+      else if (forceLocal) mode = "local (forced)";
+      else if (isCloud) mode = "cloud";
+      console.log("\n=== Available Tiers ===\n");
+      console.log(`Mode: ${mode}
+`);
+      for (const [tier, config] of Object.entries(TIERS2)) {
+        console.log(`${tier}: ${config.model}`);
+        console.log(`  Source: ${config._source || "default"}`);
+        console.log(`  Context: ${(config.contextWindow / 1024).toFixed(0)}K`);
+        console.log(`  Modality: ${config.modality.join("+")}`);
+        console.log(`  Use: ${config.useCase}`);
+        console.log();
+      }
+      console.log("=== Configuration Sources ===\n");
+      console.log("Priority: env var > config.json > default");
+      console.log("Env vars: SMART_ROUTER_SIMPLE_MODEL, SMART_ROUTER_MEDIUM_MODEL, etc.");
+      console.log("Config file: plugins/smart-router/config.json");
+    } else if (args[0] === "--modality") {
+      console.log("\n=== Multimodal Models ===\n");
+      for (const [model, caps] of Object.entries(MODEL_CAPABILITIES)) {
+        if (caps.modality.length > 1 || caps.modality.includes("vision")) {
+          console.log(`${model}`);
+          console.log(`  Modality: ${caps.modality.join("+")}`);
+          console.log(`  Context: ${(caps.context / 1024).toFixed(0)}K`);
+          console.log();
+        }
+      }
+    } else if (args[0] === "--config") {
+      const config = loadConfig();
+      console.log("\n=== Current Configuration ===\n");
+      console.log(JSON.stringify(config, null, 2));
+      console.log("\nEnvironment overrides:");
+      console.log(`  OLLAMA_CLOUD_ENABLED: ${process.env.OLLAMA_CLOUD_ENABLED || "(not set)"}`);
+      console.log(`  SMART_ROUTER_FORCE_LOCAL: ${process.env.SMART_ROUTER_FORCE_LOCAL || "(not set)"}`);
+      console.log(`  SMART_ROUTER_FORCE_CLOUD: ${process.env.SMART_ROUTER_FORCE_CLOUD || "(not set)"}`);
+      for (const tier of Object.keys(TIERS_CLOUD)) {
+        const envKey = `SMART_ROUTER_${tier}_MODEL`;
+        if (process.env[envKey]) {
+          console.log(`  ${envKey}: ${process.env[envKey]}`);
+        }
+      }
+      console.log();
+    } else {
+      const prompt = args.join(" ");
+      const result = classifyRequest(prompt, {});
+      console.log("\n=== Classification Result ===\n");
+      console.log(`Prompt: "${prompt}"`);
+      console.log(`
+Tier: ${result.tier || "AMBIGUOUS"}`);
+      console.log(`Model: ${result.model} (${result.modelSource || "default"})`);
+      console.log(`Confidence: ${result.confidence.toFixed(2)}`);
+      console.log(`Score: ${result.score.toFixed(3)}`);
+      console.log(`Modality: ${result.modality?.join("+") || "text"}`);
+      console.log(`Context: ${result.contextNeeds || "normal"} (${result.estimatedTokens} tokens)`);
+      if (result.signals.length > 0) {
+        console.log(`
+Signals:`);
+        result.signals.forEach((s) => console.log(`  - ${s}`));
+      }
+      console.log(`
+Reason: ${result.reason}`);
+      console.log();
+    }
+    module2.exports = {
+      classifyRequest,
+      detectModality,
+      needsLongContext,
+      resolveActiveTiers,
+      loadConfig,
+      TIERS_BEDROCK,
+      TIERS_CLOUD,
+      TIERS_LOCAL,
+      MODEL_CAPABILITIES
+    };
+  }
+});
+
+// complexity-tracker.cjs
+var require_complexity_tracker = __commonJS({
+  "complexity-tracker.cjs"(exports2, module2) {
+    var TIER_ORDER = ["SIMPLE", "MEDIUM", "COMPLEX", "REASONING", "MULTIMODAL", "LONG_CONTEXT"];
+    function maxTier(a, b) {
+      const aIndex = TIER_ORDER.indexOf(a);
+      const bIndex = TIER_ORDER.indexOf(b);
+      const complexIndex = TIER_ORDER.indexOf("COMPLEX");
+      const aValid = aIndex >= 0 ? aIndex : complexIndex;
+      const bValid = bIndex >= 0 ? bIndex : complexIndex;
+      if (bValid > aValid) {
+        return bIndex >= 0 ? b : "COMPLEX";
+      }
+      return aIndex >= 0 ? a : "COMPLEX";
+    }
+    function isThrottled(sessionState, maxEscalations = 3) {
+      return (sessionState?.escalationCount || 0) >= maxEscalations;
+    }
+    async function readSessionState(ctx, api) {
+      if (!ctx?.sessionKey) {
+        return null;
+      }
+      try {
+        if (typeof api.getSessionMeta === "function") {
+          const meta = await api.getSessionMeta(ctx.sessionKey);
+          return meta?.smartRouter || null;
+        }
+        if (typeof api.acp?.getSessionMeta === "function") {
+          const meta = await api.acp.getSessionMeta(ctx.sessionKey);
+          return meta?.smartRouter || null;
+        }
+        return null;
+      } catch (e) {
+        console.error("[complexity-tracker] Failed to read session state:", e.message);
+        return null;
+      }
+    }
+    async function writeSessionState(ctx, api, state) {
+      if (!ctx?.sessionKey) {
+        return false;
+      }
+      try {
+        if (typeof api.setSessionMeta === "function") {
+          await api.setSessionMeta(ctx.sessionKey, "smartRouter", state);
+          return true;
+        }
+        if (typeof api.acp?.setSessionMeta === "function") {
+          await api.acp.setSessionMeta(ctx.sessionKey, "smartRouter", state);
+          return true;
+        }
+        console.warn("[complexity-tracker] No session metadata API available");
+        return false;
+      } catch (e) {
+        console.error("[complexity-tracker] Failed to write session state:", e.message);
+        return false;
+      }
+    }
+    async function updateAfterTurn(ctx, api, classificationResult) {
+      const previousState = await readSessionState(ctx, api) || {};
+      const now = Date.now();
+      const currentTier = classificationResult?.tier || "COMPLEX";
+      const previousTier = previousState.lastComplexity?.tier || "SIMPLE";
+      const escalationHistory = previousState.escalationHistory || [];
+      if (currentTier !== previousTier && previousState.lastComplexity) {
+        escalationHistory.push({
+          from: previousTier,
+          to: currentTier,
+          timestamp: now,
+          score: classificationResult?.score
+        });
+      }
+      let escalationCount = previousState.escalationCount || 0;
+      if (currentTier !== previousTier && previousState.lastComplexity) {
+        escalationCount++;
+      }
+      const newState = {
+        lastComplexity: {
+          tier: currentTier,
+          score: classificationResult?.score || 0,
+          confidence: classificationResult?.confidence || 0,
+          timestamp: now
+        },
+        escalationCount,
+        escalationHistory: escalationHistory.slice(-10),
+        // Keep last 10 escalations
+        sessionKey: ctx.sessionKey
+      };
+      await writeSessionState(ctx, api, newState);
+      return newState;
+    }
+    async function resolveWithSession(ctx, api, currentResult, options = {}) {
+      const maxEscalations = options.maxEscalations ?? 3;
+      const previousState = await readSessionState(ctx, api);
+      if (!previousState) {
+        return {
+          ...currentResult,
+          sessionContext: {
+            isFirstTurn: true,
+            resolvedTier: currentResult.tier,
+            previousTier: null
+          }
+        };
+      }
+      const previousTier = previousState.lastComplexity?.tier || "SIMPLE";
+      const currentTier = currentResult.tier || "COMPLEX";
+      if (isThrottled(previousState, maxEscalations)) {
+        console.log(`[complexity-tracker] Throttled at ${previousTier} (${previousState.escalationCount} escalations)`);
+        return {
+          ...currentResult,
+          tier: previousTier,
+          model: getModelForTier(previousTier),
+          sessionContext: {
+            isThrottled: true,
+            resolvedTier: previousTier,
+            previousTier,
+            escalationCount: previousState.escalationCount
+          }
+        };
+      }
+      const resolvedTier = maxTier(previousTier, currentTier);
+      if (resolvedTier !== currentTier) {
+        console.log(`[complexity-tracker] Escalated: ${previousTier} \u2192 ${resolvedTier}`);
+      }
+      return {
+        ...currentResult,
+        tier: resolvedTier,
+        model: getModelForTier(resolvedTier),
+        sessionContext: {
+          isFirstTurn: false,
+          resolvedTier,
+          previousTier,
+          escalationCount: previousState.escalationCount
+        }
+      };
+    }
+    function getModelForTier(tier) {
+      const tierModels = {
+        SIMPLE: "nemotron-3-nano:30b-cloud",
+        MEDIUM: "glm-4.7:cloud",
+        COMPLEX: "glm-5:cloud",
+        REASONING: "minimax-m2.7:cloud",
+        MULTIMODAL: "kimi-k2.5:cloud",
+        LONG_CONTEXT: "nemotron-3-super:cloud",
+        FALLBACK: "mistral-large-3:675b-cloud"
+      };
+      return tierModels[tier] || tierModels.COMPLEX;
+    }
+    async function clearSessionState(ctx, api) {
+      return writeSessionState(ctx, api, null);
+    }
+    async function getEscalationStats(ctx, api) {
+      const state = await readSessionState(ctx, api);
+      if (!state) {
+        return {
+          hasSession: false,
+          escalationCount: 0,
+          currentTier: null,
+          history: []
+        };
+      }
+      return {
+        hasSession: true,
+        escalationCount: state.escalationCount || 0,
+        currentTier: state.lastComplexity?.tier || "SIMPLE",
+        lastScore: state.lastComplexity?.score || 0,
+        history: state.escalationHistory || [],
+        lastUpdate: state.lastComplexity?.timestamp || null
+      };
+    }
+    module2.exports = {
+      TIER_ORDER,
+      maxTier,
+      isThrottled,
+      readSessionState,
+      writeSessionState,
+      updateAfterTurn,
+      resolveWithSession,
+      getModelForTier,
+      clearSessionState,
+      getEscalationStats
+    };
+  }
+});
+
+// index.ts
+var index_exports = {};
+__export(index_exports, {
+  default: () => index_default
+});
+module.exports = __toCommonJS(index_exports);
+var router = null;
+try {
+  router = require_router_modality();
+} catch (e) {
+  console.error("[smart-router] Failed to load router module:", e.message);
+}
+var complexityTracker = null;
+try {
+  complexityTracker = require_complexity_tracker();
+} catch (e) {
+  console.error("[smart-router] Failed to load complexity tracker:", e.message);
+}
+var DEFAULT_TIERS = {
+  SIMPLE: "amazon-bedrock/us.amazon.nova-lite-v1:0",
+  MEDIUM: "amazon-bedrock/us.anthropic.claude-sonnet-4-6",
+  COMPLEX: "amazon-bedrock/us.anthropic.claude-sonnet-4-6",
+  REASONING: "amazon-bedrock/us.anthropic.claude-opus-4-6-v1",
+  MULTIMODAL: "amazon-bedrock/us.anthropic.claude-sonnet-4-6",
+  LONG_CONTEXT: "amazon-bedrock/us.anthropic.claude-sonnet-4-6",
+  FALLBACK: "amazon-bedrock/us.anthropic.claude-opus-4-6-v1"
+};
+var plugin = {
+  id: "smart-router",
+  name: "Smart Router",
+  description: "Intelligent model routing based on complexity",
+  version: "1.1.0",
+  // bumped for hook API fix
+  configSchema: {
+    jsonSchema: {
+      type: "object",
+      properties: {
+        enabled: { type: "boolean", default: true },
+        logDecisions: { type: "boolean", default: true }
+      }
+    }
+  },
+  register(api, config) {
+    const cfg = config || {};
+    const logDecisions = cfg.logDecisions !== false;
+    console.error("[smart-router] Plugin loaded");
+    console.error("[smart-router] API methods:", Object.keys(api || {}).join(", "));
+    if (typeof api?.on === "function") {
+      api.on("before_model_resolve", async (event, ctx) => {
+        console.error("[smart-router] ========== HOOK FIRED ==========");
+        console.error("[smart-router] Event keys:", Object.keys(event || {}));
+        console.error("[smart-router] Context agentId:", ctx?.agentId);
+        if (!router?.classifyRequest) {
+          console.error("[smart-router] Router not available - skipping");
+          return {};
+        }
+        try {
+          const prompt = event?.prompt || "";
+          const requestedModel = event?.model || ctx?.model;
+          console.error("[smart-router] Prompt length:", prompt?.length || 0);
+          console.error("[smart-router] Requested model:", requestedModel);
+          if (!prompt || !prompt.trim()) {
+            console.error("[smart-router] No prompt to analyze - skipping");
+            return {};
+          }
+          const result = router.classifyRequest(prompt, event);
+          let currentTier = result.tier || "COMPLEX";
+          let resolvedTier = currentTier;
+          let sessionContext = null;
+          if (complexityTracker && ctx?.sessionKey) {
+            try {
+              const resolved = await complexityTracker.resolveWithSession(
+                ctx,
+                api,
+                result,
+                { maxEscalations: 3 }
+              );
+              resolvedTier = resolved.tier;
+              sessionContext = resolved.sessionContext;
+            } catch (e) {
+              console.error("[smart-router] Session resolution error:", e.message);
+            }
+          }
+          const tierConfig = DEFAULT_TIERS[resolvedTier];
+          if (!tierConfig) {
+            console.error("[smart-router] No config for tier:", resolvedTier);
+            return {};
+          }
+          let modelOverride;
+          let providerOverride;
+          if (tierConfig.includes("/")) {
+            const slashIdx = tierConfig.indexOf("/");
+            providerOverride = tierConfig.slice(0, slashIdx);
+            modelOverride = tierConfig.slice(slashIdx + 1);
+          } else {
+            modelOverride = tierConfig;
+          }
+          if (logDecisions) {
+            const sessionInfo = sessionContext?.isFirstTurn ? "(first turn)" : sessionContext?.isThrottled ? `(throttled at ${sessionContext.previousTier})` : sessionContext?.resolvedTier !== currentTier ? `(escalated from ${sessionContext?.previousTier})` : "";
+            const routeMsg = `[smart-router] Route: tier=${resolvedTier} \u2192 ${providerOverride ? `${providerOverride}/` : ""}${modelOverride} ${sessionInfo}`;
+            console.error(routeMsg);
+          }
+          return {
+            modelOverride,
+            providerOverride
+          };
+        } catch (e) {
+          console.error("[smart-router] before_model_resolve hook error:", e.message);
+          return {};
+        }
+      });
+      console.error("[smart-router] Hook registered: before_model_resolve via api.on()");
+      if (typeof api.registerHook === "function" && complexityTracker) {
+        api.registerHook("llm_output", async (event, ctx) => {
+          try {
+            const response = event?.response || event?.output || event?.text || "";
+            if (!response || typeof response !== "string" || !response.trim()) {
+              return event;
+            }
+            if (!ctx?.sessionKey) {
+              return event;
+            }
+            const complexityScore = router.classifyRequest(response, event);
+            await complexityTracker.updateAfterTurn(ctx, api, complexityScore);
+            if (logDecisions) {
+              console.error(`[smart-router] Tracked complexity: ${complexityScore.tier} (score: ${complexityScore.score?.toFixed(2)})`);
+            }
+            return event;
+          } catch (e) {
+            console.error("[smart-router] llm_output hook error:", e.message);
+            return event;
+          }
+        }, { name: "smart-router-track" });
+        console.error("[smart-router] Hook registered: llm_output via api.registerHook()");
+      }
+    } else {
+      console.error("[smart-router] ERROR: api.on() not available!");
+      console.error("[smart-router] Available API methods:", Object.keys(api || {}).join(", "));
+    }
+  }
+};
+var index_default = plugin;
