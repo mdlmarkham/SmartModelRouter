@@ -64,6 +64,36 @@ When selecting models for each tier, consider:
 
 ## Installation
 
+### As OpenClaw Plugin (Recommended)
+
+1. **Clone or download** the plugin:
+   ```bash
+   cd ~/.openclaw/extensions
+   git clone https://github.com/mdlmarkham/SmartModelRouter.git smart-router
+   ```
+
+2. **Restart OpenClaw gateway** to load the plugin:
+   ```bash
+   systemctl --user restart openclaw-gateway
+   # or
+   pkill -f openclaw-gateway && cd /usr/lib/node_modules/openclaw && node openclaw.mjs start
+   ```
+
+3. **Verify plugin loaded** — check logs for:
+   ```
+   [smart-router] Plugin initializing...
+   [smart-router] Hook registered: before_model_resolve via api.on()
+   ```
+
+4. **Configure models** for your environment — see [Configuration](#configuration) below
+
+5. **Test routing** — send a simple message and check logs output:
+   ```
+   [smart-router] Route: tier=SIMPLE → glm-4.7:cloud
+   ```
+
+### Via npm
+
 ```bash
 npm install @openclaw/smart-router
 ```
@@ -335,6 +365,15 @@ node tune-thresholds.cjs
 ```
 
 ## Recent Changes
+
+### v1.2.0 (2026-03-25)
+- **Critical Fix**: Changed `before_model_resolve` hook from `api.registerHook()` to `api.on()`
+  - `api.registerHook()` is for **internal lifecycle hooks only** — never fires during agent runs
+  - `api.on()` is for **typed plugin hooks** — participates in agent model selection pipeline
+  - Now routes correctly on every agent turn
+- **Added**: `providerOverride` split for provider-prefixed model IDs (e.g., `amazon-bedrock/us.xxx`)
+- **Added**: Verbose console logging for debugging hook fires and routing decisions
+- **Docs**: Added OpenClaw plugin installation instructions
 
 ### v1.1.2 (2026-03-23)
 - **Docs**: Added OpenAI config example (major gap)
