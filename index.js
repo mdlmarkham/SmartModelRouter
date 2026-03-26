@@ -1125,29 +1125,30 @@ var router = null;
 try {
   router = require_router_modality();
 } catch (e) {
-  console.error("[smart-router] Failed to load router module:", e.message);
 }
 var complexityTracker = null;
 try {
   complexityTracker = require_complexity_tracker();
 } catch (e) {
-  console.error("[smart-router] Failed to load complexity tracker:", e.message);
 }
-var DEFAULT_TIERS = {
-  SIMPLE: "amazon-bedrock/us.amazon.nova-lite-v1:0",
-  MEDIUM: "amazon-bedrock/us.anthropic.claude-sonnet-4-6",
-  COMPLEX: "amazon-bedrock/us.anthropic.claude-sonnet-4-6",
-  REASONING: "amazon-bedrock/us.anthropic.claude-opus-4-6-v1",
-  MULTIMODAL: "amazon-bedrock/us.anthropic.claude-sonnet-4-6",
-  LONG_CONTEXT: "amazon-bedrock/us.anthropic.claude-sonnet-4-6",
-  FALLBACK: "amazon-bedrock/us.anthropic.claude-opus-4-6-v1"
-};
+function resolveTierProvider(tier) {
+  const tierMap = {
+    "SIMPLE": "ollama/nemotron-3-nano:30b-cloud",
+    "MEDIUM": "ollama/glm-4.7:cloud",
+    "COMPLEX": "ollama/glm-5:cloud",
+    "REASONING": "ollama/minimax-m2.7:cloud",
+    "MULTIMODAL": "ollama/kimi-k2.5:cloud",
+    "LONG_CONTEXT": "ollama/nemotron-3-super:cloud",
+    "FALLBACK": "ollama/mistral-large-3:675b-cloud"
+  };
+  return tierMap[tier] || tierMap["FALLBACK"];
+}
 var plugin = {
   id: "smart-router",
   name: "Smart Router",
   description: "Intelligent model routing based on complexity",
-  version: "1.1.0",
-  // bumped for hook API fix
+  version: "1.2.0",
+  // cleanup: proper logging, fix llm_output hook
   configSchema: {
     jsonSchema: {
       type: "object",
@@ -1160,100 +1161,88 @@ var plugin = {
   register(api, config) {
     const cfg = config || {};
     const logDecisions = cfg.logDecisions !== false;
-    console.error("[smart-router] Plugin loaded");
-    console.error("[smart-router] API methods:", Object.keys(api || {}).join(", "));
-    if (typeof api?.on === "function") {
-      api.on("before_model_resolve", async (event, ctx) => {
-        console.error("[smart-router] ========== HOOK FIRED ==========");
-        console.error("[smart-router] Event keys:", Object.keys(event || {}));
-        console.error("[smart-router] Context agentId:", ctx?.agentId);
-        if (!router?.classifyRequest) {
-          console.error("[smart-router] Router not available - skipping");
+    const logger = api.logger;
+    logger.info("[smart-router] Plugin loaded v1.2.0");
+    if (typeof api?.on !== "function") {
+      logger.error("[smart-router] ERROR: api.on() not available - plugin cannot function");
+      return;
+    }
+    api.on("before_model_resolve", async (event, ctx) => {
+      if (!router?.classifyRequest) {
+        return {};
+      }
+      try {
+        const prompt = event?.prompt || "";
+        const requestedModel = event?.model || ctx?.model;
+        if (!prompt || !prompt.trim()) {
           return {};
         }
-        try {
-          const prompt = event?.prompt || "";
-          const requestedModel = event?.model || ctx?.model;
-          console.error("[smart-router] Prompt length:", prompt?.length || 0);
-          console.error("[smart-router] Requested model:", requestedModel);
-          if (!prompt || !prompt.trim()) {
-            console.error("[smart-router] No prompt to analyze - skipping");
-            return {};
+        const result = router.classifyRequest(prompt, event);
+        let currentTier = result.tier || "COMPLEX";
+        let resolvedTier = currentTier;
+        let sessionContext = null;
+        if (complexityTracker && ctx?.sessionKey) {
+          try {
+            const resolved = await complexityTracker.resolveWithSession(
+              ctx,
+              api,
+              result,
+              { maxEscalations: 3 }
+            );
+            resolvedTier = resolved.tier;
+            sessionContext = resolved.sessionContext;
+          } catch (e) {
           }
-          const result = router.classifyRequest(prompt, event);
-          let currentTier = result.tier || "COMPLEX";
-          let resolvedTier = currentTier;
-          let sessionContext = null;
-          if (complexityTracker && ctx?.sessionKey) {
-            try {
-              const resolved = await complexityTracker.resolveWithSession(
-                ctx,
-                api,
-                result,
-                { maxEscalations: 3 }
-              );
-              resolvedTier = resolved.tier;
-              sessionContext = resolved.sessionContext;
-            } catch (e) {
-              console.error("[smart-router] Session resolution error:", e.message);
-            }
-          }
-          const tierConfig = DEFAULT_TIERS[resolvedTier];
-          if (!tierConfig) {
-            console.error("[smart-router] No config for tier:", resolvedTier);
-            return {};
-          }
-          let modelOverride;
-          let providerOverride;
-          if (tierConfig.includes("/")) {
-            const slashIdx = tierConfig.indexOf("/");
-            providerOverride = tierConfig.slice(0, slashIdx);
-            modelOverride = tierConfig.slice(slashIdx + 1);
-          } else {
-            modelOverride = tierConfig;
-          }
-          if (logDecisions) {
-            const sessionInfo = sessionContext?.isFirstTurn ? "(first turn)" : sessionContext?.isThrottled ? `(throttled at ${sessionContext.previousTier})` : sessionContext?.resolvedTier !== currentTier ? `(escalated from ${sessionContext?.previousTier})` : "";
-            const routeMsg = `[smart-router] Route: tier=${resolvedTier} \u2192 ${providerOverride ? `${providerOverride}/` : ""}${modelOverride} ${sessionInfo}`;
-            console.error(routeMsg);
-          }
-          return {
-            modelOverride,
-            providerOverride
-          };
-        } catch (e) {
-          console.error("[smart-router] before_model_resolve hook error:", e.message);
+        }
+        const tierConfig = resolveTierProvider(resolvedTier);
+        if (!tierConfig) {
           return {};
+        }
+        let modelOverride;
+        let providerOverride;
+        if (tierConfig.includes("/")) {
+          const slashIdx = tierConfig.indexOf("/");
+          providerOverride = tierConfig.slice(0, slashIdx);
+          modelOverride = tierConfig.slice(slashIdx + 1);
+        } else {
+          modelOverride = tierConfig;
+        }
+        if (logDecisions) {
+          const sessionInfo = sessionContext?.isFirstTurn ? "(first turn)" : sessionContext?.isThrottled ? `(throttled at ${sessionContext.previousTier})` : sessionContext?.resolvedTier !== currentTier ? `(escalated from ${sessionContext?.previousTier})` : "";
+          logger.info(`[smart-router] Route: tier=${resolvedTier} \u2192 ${providerOverride ? `${providerOverride}/` : ""}${modelOverride} ${sessionInfo}`);
+        }
+        return {
+          modelOverride,
+          providerOverride
+        };
+      } catch (e) {
+        logger.error("[smart-router] before_model_resolve hook error:", e.message);
+        return {};
+      }
+    });
+    if (complexityTracker) {
+      api.on("llm_output", async (event, ctx) => {
+        try {
+          const response = event?.response || event?.output || event?.text || "";
+          if (!response || typeof response !== "string" || !response.trim()) {
+            return event;
+          }
+          if (!ctx?.sessionKey) {
+            return event;
+          }
+          const complexityScore = router.classifyRequest(response, event);
+          await complexityTracker.updateAfterTurn(ctx, api, complexityScore);
+          if (logDecisions) {
+            logger.info(`[smart-router] Tracked complexity: ${complexityScore.tier} (score: ${complexityScore.score?.toFixed(2)})`);
+          }
+          return event;
+        } catch (e) {
+          logger.error("[smart-router] llm_output hook error:", e.message);
+          return event;
         }
       });
-      console.error("[smart-router] Hook registered: before_model_resolve via api.on()");
-      if (typeof api.registerHook === "function" && complexityTracker) {
-        api.registerHook("llm_output", async (event, ctx) => {
-          try {
-            const response = event?.response || event?.output || event?.text || "";
-            if (!response || typeof response !== "string" || !response.trim()) {
-              return event;
-            }
-            if (!ctx?.sessionKey) {
-              return event;
-            }
-            const complexityScore = router.classifyRequest(response, event);
-            await complexityTracker.updateAfterTurn(ctx, api, complexityScore);
-            if (logDecisions) {
-              console.error(`[smart-router] Tracked complexity: ${complexityScore.tier} (score: ${complexityScore.score?.toFixed(2)})`);
-            }
-            return event;
-          } catch (e) {
-            console.error("[smart-router] llm_output hook error:", e.message);
-            return event;
-          }
-        }, { name: "smart-router-track" });
-        console.error("[smart-router] Hook registered: llm_output via api.registerHook()");
-      }
-    } else {
-      console.error("[smart-router] ERROR: api.on() not available!");
-      console.error("[smart-router] Available API methods:", Object.keys(api || {}).join(", "));
     }
+    logger.info("[smart-router] Hooks registered: before_model_resolve, llm_output");
   }
 };
 var index_default = plugin;
