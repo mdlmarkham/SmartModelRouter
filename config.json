@@ -1,0 +1,13 @@
+{
+  "enabled": true,
+  "logDecisions": true,
+  "models": {
+    "SIMPLE": "ollama/glm-4.7:cloud",
+    "MEDIUM": "ollama/glm-4.7:cloud",
+    "COMPLEX": "ollama/glm-5:cloud",
+    "REASONING": "ollama/minimax-m2.7:cloud",
+    "MULTIMODAL": "ollama/kimi-k2.5:cloud",
+    "LONG_CONTEXT": "ollama/nemotron-3-super:cloud",
+    "FALLBACK": "ollama/glm-5:cloud"
+  }
+}

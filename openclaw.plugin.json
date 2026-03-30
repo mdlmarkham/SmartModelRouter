@@ -1,0 +1,40 @@
+{
+  "id": "smart-router",
+  "name": "Smart Router",
+  "version": "4.0.0",
+  "description": "Intelligent model routing based on prompt complexity",
+  "main": "index.js",
+  "configSchema": {
+    "type": "object",
+    "properties": {
+      "enabled": {
+        "type": "boolean",
+        "description": "Enable smart routing",
+        "default": true
+      },
+      "logDecisions": {
+        "type": "boolean",
+        "description": "Log routing decisions",
+        "default": true
+      },
+      "models": {
+        "type": "object",
+        "description": "Override models for each tier",
+        "properties": {
+          "SIMPLE": { "type": "string" },
+          "MEDIUM": { "type": "string" },
+          "COMPLEX": { "type": "string" },
+          "REASONING": { "type": "string" },
+          "MULTIMODAL": { "type": "string" },
+          "LONG_CONTEXT": { "type": "string" },
+          "FALLBACK": { "type": "string" }
+        }
+      }
+    },
+    "additionalProperties": false
+  },
+  "openclaw": {
+    "minVersion": "2025.1.0",
+    "hooks": ["before_model_resolve"]
+  }
+}

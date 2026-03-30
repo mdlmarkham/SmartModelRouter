@@ -1,22 +1,20 @@
 {
-  "name": "@openclaw/smart-router",
-  "version": "1.2.0",
-  "description": "Smart model routing based on complexity for OpenClaw LLM gateway",
-  "main": "index.ts",
-  "license": "ISC",
+  "name": "smart-router",
+  "version": "4.0.0",
+  "description": "Intelligent model routing for OpenClaw based on prompt complexity",
+  "main": "index.js",
+  "license": "MIT",
   "repository": {
     "type": "git",
     "url": "https://github.com/mdlmarkham/SmartModelRouter.git"
   },
   "keywords": [
     "openclaw",
+    "model-routing",
     "llm",
-    "routing",
-    "model-selection",
-    "cost-optimization",
-    "plugin"
+    "complexity-scoring"
   ],
-  "devDependencies": {
-    "@types/node": "^20.0.0"
+  "engines": {
+    "node": ">=18.0.0"
   }
 }
